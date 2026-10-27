@@ -67,6 +67,7 @@
       <DependentUpon>Form3.cs</DependentUpon>
     </Compile>
         <Compile Include="Program.cs" />
+    <Compile Include="SeguridadServicio.cs" />
     <Compile Include="DatosEscolares.cs" />
     <Compile Include="FormDialogoRegistro.cs">
       <SubType>Form</SubType>

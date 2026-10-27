@@ -118,7 +118,7 @@ namespace Sistema_Escolar
             this.txtUsuario.Name = "txtUsuario";
             this.txtUsuario.Size = new System.Drawing.Size(360, 29);
             this.txtUsuario.TabIndex = 4;
-            this.txtUsuario.Text = "admin";
+            this.txtUsuario.Text = "";
             // 
             // lblContrasena
             // 
@@ -139,7 +139,7 @@ namespace Sistema_Escolar
             this.txtContrasena.Name = "txtContrasena";
             this.txtContrasena.Size = new System.Drawing.Size(360, 29);
             this.txtContrasena.TabIndex = 6;
-            this.txtContrasena.Text = "1234";
+            this.txtContrasena.Text = "";
             this.txtContrasena.UseSystemPasswordChar = true;
             // 
             // chkMostrarContra
@@ -207,7 +207,7 @@ namespace Sistema_Escolar
             this.lblAyuda.Name = "lblAyuda";
             this.lblAyuda.Size = new System.Drawing.Size(410, 40);
             this.lblAyuda.TabIndex = 11;
-            this.lblAyuda.Text = "💡 Usuario de prueba: admin  |  Contraseña: 1234\r\n(O ingresa cualquier cuenta deseada)";
+            this.lblAyuda.Text = "🔐 Usa tus credenciales asignadas por el administrador.\r\nLas contraseñas se validan de forma segura.";
             this.lblAyuda.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
             // Menu_Login

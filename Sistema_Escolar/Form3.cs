@@ -13,7 +13,7 @@ namespace Sistema_Escolar
 
         private void Menu_Princ_Load(object sender, EventArgs e)
         {
-            lblUsuarioSesion.Text = "👤 Usuario: " + DatosEscolares.UsuarioActual;
+            lblUsuarioSesion.Text = "👤 Usuario: " + DatosEscolares.UsuarioActual + " (" + DatosEscolares.RolActual + ")";
             
             // Mostrar fecha actual en formato amigable en español
             try

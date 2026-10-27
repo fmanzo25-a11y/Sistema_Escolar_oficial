@@ -6,11 +6,30 @@ namespace Sistema_Escolar
 {
     public partial class Menu_Login : Form
     {
+        private static bool advertenciasMostradas;
+
         public Menu_Login()
         {
             InitializeComponent();
             this.AcceptButton = btnIniciarSesion;
             this.CancelButton = btnSalir;
+            this.Load += Menu_Login_Load;
+        }
+
+        private void Menu_Login_Load(object sender, EventArgs e)
+        {
+            if (advertenciasMostradas) return;
+
+            advertenciasMostradas = true;
+            string advertencias = (DatosEscolares.UltimoErrorInicializacion + Environment.NewLine + SeguridadServicio.UltimoErrorUsuarios).Trim();
+            if (!string.IsNullOrWhiteSpace(advertencias))
+            {
+                MessageBox.Show(
+                    advertencias,
+                    "Advertencias de inicialización",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
         }
 
         private void btnIniciarSesion_Click(object sender, EventArgs e)
@@ -26,37 +45,14 @@ namespace Sistema_Escolar
                 return;
             }
 
-            // Validación de credenciales
-            // Se aceptan las cuentas estándar o cualquier usuario con clave no vacía
-            bool valido = false;
-            string rol = "Administrador";
-
-            if (usuario.ToLower() == "admin" && (contrasena == "1234" || contrasena == "admin"))
-            {
-                valido = true;
-                rol = "Administrador";
-            }
-            else if (usuario.ToLower() == "docente" && contrasena == "1234")
-            {
-                valido = true;
-                rol = "Docente";
-            }
-            else if (usuario.ToLower() == "alumno" && contrasena == "1234")
-            {
-                valido = true;
-                rol = "Estudiante";
-            }
-            else if (contrasena.Length >= 3)
-            {
-                // Permitir acceso flexible a cuentas personalizadas
-                valido = true;
-                rol = usuario;
-            }
+            bool valido = SeguridadServicio.ValidarCredenciales(usuario, contrasena, out string rol, out string mensajeError);
 
             if (valido)
             {
                 DatosEscolares.UsuarioActual = usuario;
+                DatosEscolares.RolActual = rol;
                 MostrarMensaje("¡Acceso correcto! Iniciando sesión...", false);
+                DatosEscolares.RegistrarAuditoria("INICIO_SESION", "login", "Inicio de sesión exitoso.");
 
                 // Abrir el Menú Principal
                 Menu_Princ menu = new Menu_Princ();
@@ -73,7 +69,8 @@ namespace Sistema_Escolar
             }
             else
             {
-                MostrarMensaje("Usuario o contraseña incorrectos.", true);
+                DatosEscolares.RegistrarAuditoria("INICIO_SESION_FALLIDO", "login", "Intento fallido para usuario '" + usuario + "'.");
+                MostrarMensaje(mensajeError, true);
                 txtContrasena.SelectAll();
                 txtContrasena.Focus();
             }

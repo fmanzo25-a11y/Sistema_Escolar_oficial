@@ -2,20 +2,23 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
+using System.Globalization;
+using System.Linq;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace Sistema_Escolar
 {
     public partial class FormDialogoRegistro : Form
     {
-        private string modulo;
-        private DataRow filaEditar;
-        private DataTable tabla;
-        private Dictionary<string, Control> camposControles = new Dictionary<string, Control>();
+        private readonly string modulo;
+        private readonly DataRow filaEditar;
+        private readonly DataTable tabla;
+        private readonly Dictionary<string, Control> camposControles = new Dictionary<string, Control>();
 
         public FormDialogoRegistro(string tipoModulo, DataRow fila = null)
         {
-            this.modulo = tipoModulo.ToLower();
+            this.modulo = (tipoModulo ?? string.Empty).ToLowerInvariant();
             this.filaEditar = fila;
             this.tabla = DatosEscolares.ObtenerTabla(this.modulo);
 
@@ -37,7 +40,6 @@ namespace Sistema_Escolar
 
         private void ConstruirFormulario()
         {
-            // Panel de Encabezado
             Panel headerPanel = new Panel
             {
                 Dock = DockStyle.Top,
@@ -67,7 +69,6 @@ namespace Sistema_Escolar
             headerPanel.Controls.Add(lblSubtitulo);
             this.Controls.Add(headerPanel);
 
-            // Panel Contenedor de Campos (con scroll si es necesario)
             Panel pnlCampos = new Panel
             {
                 Location = new Point(20, 80),
@@ -87,72 +88,8 @@ namespace Sistema_Escolar
                     ForeColor = Color.FromArgb(50, 60, 75)
                 };
 
-                Control inputCtrl;
-
-                // ComboBox para campos predefinidos
-                if (col.ColumnName == "Turno")
-                {
-                    ComboBox cb = new ComboBox
-                    {
-                        Location = new Point(195, yPos - 3),
-                        Size = new Size(260, 26),
-                        DropDownStyle = ComboBoxStyle.DropDownList
-                    };
-                    cb.Items.AddRange(new object[] { "Matutino", "Vespertino", "Completo", "Mixto" });
-                    cb.SelectedIndex = 0;
-                    inputCtrl = cb;
-                }
-                else if (col.ColumnName == "Estado")
-                {
-                    ComboBox cb = new ComboBox
-                    {
-                        Location = new Point(195, yPos - 3),
-                        Size = new Size(260, 26),
-                        DropDownStyle = ComboBoxStyle.DropDownList
-                    };
-                    cb.Items.AddRange(new object[] { "Activo", "Inactivo", "Baja Temporal", "Graduado" });
-                    cb.SelectedIndex = 0;
-                    inputCtrl = cb;
-                }
-                else if (col.ColumnName == "Grado")
-                {
-                    ComboBox cb = new ComboBox
-                    {
-                        Location = new Point(195, yPos - 3),
-                        Size = new Size(260, 26),
-                        DropDownStyle = ComboBoxStyle.DropDownList
-                    };
-                    cb.Items.AddRange(new object[] { "1ro", "2do", "3ro", "4to", "5to", "6to" });
-                    cb.SelectedIndex = 0;
-                    inputCtrl = cb;
-                }
-                else
-                {
-                    TextBox txt = new TextBox
-                    {
-                        Location = new Point(195, yPos - 3),
-                        Size = new Size(260, 26),
-                        BorderStyle = BorderStyle.FixedSingle,
-                        Font = new Font("Segoe UI", 9.5F)
-                    };
-                    inputCtrl = txt;
-                }
-
-                // Si estamos editando, cargar el valor existente
-                if (filaEditar != null && filaEditar[col.ColumnName] != DBNull.Value)
-                {
-                    string valor = filaEditar[col.ColumnName].ToString();
-                    if (inputCtrl is ComboBox cb)
-                    {
-                        int idx = cb.FindStringExact(valor);
-                        if (idx >= 0) cb.SelectedIndex = idx;
-                        else { cb.Items.Add(valor); cb.SelectedItem = valor; }
-                    }
-                    else if (inputCtrl is TextBox txt)
-                    {
-                        txt.Text = valor;
-                    }
-                }
+                Control inputCtrl = CrearControlCampo(col.ColumnName, yPos);
+                CargarValorEdicion(col.ColumnName, inputCtrl);
 
                 camposControles[col.ColumnName] = inputCtrl;
                 pnlCampos.Controls.Add(lbl);
@@ -163,7 +100,6 @@ namespace Sistema_Escolar
 
             this.Controls.Add(pnlCampos);
 
-            // Panel Inferior con Botones
             Panel footerPanel = new Panel
             {
                 Dock = DockStyle.Bottom,
@@ -207,42 +143,124 @@ namespace Sistema_Escolar
             this.CancelButton = btnCancelar;
         }
 
+        private Control CrearControlCampo(string columnName, int yPos)
+        {
+            ComboBox combo = null;
+
+            if (columnName == "Turno")
+            {
+                combo = CrearCombo(yPos, new[] { "Matutino", "Vespertino", "Completo", "Mixto" });
+            }
+            else if (columnName == "Estado")
+            {
+                combo = CrearCombo(yPos, new[] { "Activo", "Inactivo", "Baja Temporal", "Graduado" });
+            }
+            else if (columnName == "Grado")
+            {
+                combo = CrearCombo(yPos, new[] { "1ro", "2do", "3ro", "4to", "5to", "6to" });
+            }
+            else if (columnName == "Grupo" && modulo.Contains("alum"))
+            {
+                combo = CrearCombo(yPos, new[] { "A", "B", "C", "D", "E", "F" });
+            }
+            else if (columnName == "Dia" && modulo.Contains("hora"))
+            {
+                combo = CrearCombo(yPos, new[] { "Lunes y Miércoles", "Martes y Jueves", "Lunes y Viernes", "Miércoles y Viernes", "Sábado" });
+            }
+            else if (columnName == "Docente" && modulo.Contains("hora"))
+            {
+                combo = CrearCombo(yPos, DatosEscolares.ObtenerDocentesDisponibles().ToArray());
+            }
+            else if (columnName == "Grupo" && modulo.Contains("hora"))
+            {
+                combo = CrearCombo(yPos, DatosEscolares.ObtenerGruposDisponibles().ToArray());
+            }
+
+            if (combo != null) return combo;
+
+            return new TextBox
+            {
+                Location = new Point(195, yPos - 3),
+                Size = new Size(260, 26),
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("Segoe UI", 9.5F)
+            };
+        }
+
+        private ComboBox CrearCombo(int yPos, string[] items)
+        {
+            ComboBox cb = new ComboBox
+            {
+                Location = new Point(195, yPos - 3),
+                Size = new Size(260, 26),
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+            cb.Items.AddRange(items);
+            if (cb.Items.Count > 0) cb.SelectedIndex = 0;
+            return cb;
+        }
+
+        private void CargarValorEdicion(string columnName, Control control)
+        {
+            if (filaEditar == null) return;
+            if (filaEditar[columnName] == DBNull.Value) return;
+
+            string valor = filaEditar[columnName].ToString();
+            if (control is ComboBox cb)
+            {
+                int idx = cb.FindStringExact(valor);
+                if (idx >= 0)
+                {
+                    cb.SelectedIndex = idx;
+                }
+                else
+                {
+                    cb.Items.Add(valor);
+                    cb.SelectedItem = valor;
+                }
+            }
+            else if (control is TextBox txt)
+            {
+                txt.Text = valor;
+            }
+        }
+
         private void BtnGuardar_Click(object sender, EventArgs e)
         {
-            // Validar campos obligatorios
-            foreach (var kvp in camposControles)
+            if (!ValidarCampos(out string mensaje, out Control controlError))
             {
-                string valor = kvp.Value.Text.Trim();
-                if (string.IsNullOrEmpty(valor) && (kvp.Key.Contains("Matricula") || kvp.Key.Contains("ID") || kvp.Key.Contains("Codigo") || kvp.Key.Contains("Nombre") || kvp.Key.Contains("Materia")))
-                {
-                    MessageBox.Show($"El campo '{FormatearNombreColumna(kvp.Key)}' es obligatorio.", "Validación", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    kvp.Value.Focus();
-                    return;
-                }
+                MessageBox.Show(mensaje, "Validación", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                controlError?.Focus();
+                return;
             }
 
             try
             {
                 if (filaEditar == null)
                 {
-                    // Nuevo registro
                     DataRow nuevaFila = tabla.NewRow();
                     foreach (var kvp in camposControles)
                     {
                         nuevaFila[kvp.Key] = kvp.Value.Text.Trim();
                     }
                     tabla.Rows.Add(nuevaFila);
+                    DatosEscolares.RegistrarAuditoria("AGREGAR", modulo, "Nuevo registro creado.");
                 }
                 else
                 {
-                    // Edición
                     foreach (var kvp in camposControles)
                     {
                         filaEditar[kvp.Key] = kvp.Value.Text.Trim();
                     }
+                    DatosEscolares.RegistrarAuditoria("EDITAR", modulo, "Registro actualizado.");
                 }
 
-                DatosEscolares.GuardarDatos();
+                if (!DatosEscolares.GuardarDatos(out string error))
+                {
+                    MessageBox.Show(error, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
                 this.DialogResult = DialogResult.OK;
                 this.Close();
             }
@@ -252,11 +270,123 @@ namespace Sistema_Escolar
             }
         }
 
+        private bool ValidarCampos(out string mensaje, out Control controlError)
+        {
+            mensaje = string.Empty;
+            controlError = null;
+
+            foreach (var kvp in camposControles)
+            {
+                string key = kvp.Key;
+                string valor = kvp.Value.Text.Trim();
+                bool obligatorio = key.Contains("Matricula") || key.Contains("ID") || key.Contains("Codigo") || key.Contains("Nombre") || key.Contains("Materia");
+
+                if (obligatorio && string.IsNullOrWhiteSpace(valor))
+                {
+                    mensaje = $"El campo '{FormatearNombreColumna(key)}' es obligatorio.";
+                    controlError = kvp.Value;
+                    return false;
+                }
+
+                if (key == "Email" && !string.IsNullOrWhiteSpace(valor))
+                {
+                    if (!Regex.IsMatch(valor, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+                    {
+                        mensaje = "El correo electrónico no tiene un formato válido.";
+                        controlError = kvp.Value;
+                        return false;
+                    }
+                }
+
+                if (key == "Telefono" && !string.IsNullOrWhiteSpace(valor))
+                {
+                    if (!Regex.IsMatch(valor, @"^\d{2}-\d{4}-\d{4}$"))
+                    {
+                        mensaje = "El teléfono debe seguir el formato 55-1234-5678.";
+                        controlError = kvp.Value;
+                        return false;
+                    }
+                }
+
+                if (key == "Promedio" && !string.IsNullOrWhiteSpace(valor))
+                {
+                    if (!decimal.TryParse(valor.Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out decimal promedio) || promedio < 0 || promedio > 10)
+                    {
+                        mensaje = "El promedio debe ser un número entre 0 y 10.";
+                        controlError = kvp.Value;
+                        return false;
+                    }
+                }
+
+                if (key == "Horario" && !string.IsNullOrWhiteSpace(valor))
+                {
+                    if (!Regex.IsMatch(valor, @"^\d{2}:\d{2}\s*-\s*\d{2}:\d{2}$"))
+                    {
+                        mensaje = "El horario debe tener el formato HH:mm - HH:mm.";
+                        controlError = kvp.Value;
+                        return false;
+                    }
+                }
+            }
+
+            string claveUnica = ObtenerCampoClaveUnica();
+            if (!string.IsNullOrWhiteSpace(claveUnica))
+            {
+                string valorClave = camposControles[claveUnica].Text.Trim();
+                bool duplicado = tabla.AsEnumerable()
+                    .Where(r => filaEditar == null || r != filaEditar)
+                    .Any(r => string.Equals((r[claveUnica]?.ToString() ?? string.Empty).Trim(), valorClave, StringComparison.OrdinalIgnoreCase));
+
+                if (duplicado)
+                {
+                    mensaje = $"Ya existe un registro con el mismo valor en '{FormatearNombreColumna(claveUnica)}'.";
+                    controlError = camposControles[claveUnica];
+                    return false;
+                }
+            }
+
+            if (modulo.Contains("hora"))
+            {
+                string docente = camposControles.ContainsKey("Docente") ? camposControles["Docente"].Text.Trim() : string.Empty;
+                string grupo = camposControles.ContainsKey("Grupo") ? camposControles["Grupo"].Text.Trim().ToUpperInvariant() : string.Empty;
+
+                string valorOriginalDocente = filaEditar == null ? string.Empty : (filaEditar["Docente"]?.ToString() ?? string.Empty).Trim();
+                string valorOriginalGrupo = filaEditar == null ? string.Empty : (filaEditar["Grupo"]?.ToString() ?? string.Empty).Trim().ToUpperInvariant();
+
+                HashSet<string> docentes = new HashSet<string>(DatosEscolares.ObtenerDocentesDisponibles(), StringComparer.OrdinalIgnoreCase);
+                HashSet<string> grupos = new HashSet<string>(DatosEscolares.ObtenerGruposDisponibles(), StringComparer.OrdinalIgnoreCase);
+
+                if (!string.Equals(docente, valorOriginalDocente, StringComparison.OrdinalIgnoreCase) && !docentes.Contains(docente))
+                {
+                    mensaje = "El docente seleccionado no existe en el catálogo de docentes.";
+                    controlError = camposControles["Docente"];
+                    return false;
+                }
+
+                if (!string.Equals(grupo, valorOriginalGrupo, StringComparison.OrdinalIgnoreCase) && grupos.Count > 0 && !grupos.Contains(grupo))
+                {
+                    mensaje = "El grupo seleccionado no existe en el catálogo de alumnos.";
+                    controlError = camposControles["Grupo"];
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private string ObtenerCampoClaveUnica()
+        {
+            if (camposControles.ContainsKey("Matricula")) return "Matricula";
+            if (camposControles.ContainsKey("ID_Docente")) return "ID_Docente";
+            if (camposControles.ContainsKey("Codigo")) return "Codigo";
+            return string.Empty;
+        }
+
         private Color ObtenerColorTema()
         {
-            if (modulo.Contains("alum")) return Color.FromArgb(20, 120, 80);    // Verde Esmeralda
-            if (modulo.Contains("docen")) return Color.FromArgb(90, 45, 130);   // Morado Elegante
-            if (modulo.Contains("hora")) return Color.FromArgb(25, 95, 160);    // Azul Profesional
+            if (modulo.Contains("alum")) return Color.FromArgb(20, 120, 80);
+            if (modulo.Contains("docen")) return Color.FromArgb(90, 45, 130);
+            if (modulo.Contains("hora")) return Color.FromArgb(25, 95, 160);
             return Color.FromArgb(40, 60, 90);
         }
 
@@ -284,7 +414,7 @@ namespace Sistema_Escolar
 
         private string Capitalizar(string texto)
         {
-            if (string.IsNullOrEmpty(texto)) return "";
+            if (string.IsNullOrEmpty(texto)) return string.Empty;
             return char.ToUpper(texto[0]) + texto.Substring(1);
         }
     }

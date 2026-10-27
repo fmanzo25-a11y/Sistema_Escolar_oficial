@@ -10,6 +10,9 @@ namespace Sistema_Escolar
         private string modulo;
         private DataTable tablaDatos;
         private DataView vistaDatos;
+        private Button btnExportarCsv;
+        private Button btnRespaldo;
+        private Button btnRestaurar;
 
         public Sistema_Alum(string tipoModulo)
         {
@@ -21,6 +24,8 @@ namespace Sistema_Escolar
         {
             ConfigurarTemaModulo();
             CargarDatos();
+            ConfigurarFuncionesAdicionales();
+            AplicarPermisosPorRol();
         }
 
         private void ConfigurarTemaModulo()
@@ -32,7 +37,7 @@ namespace Sistema_Escolar
 
             if (modulo.Contains("alum"))
             {
-                colorTema = Color.FromArgb(20, 120, 80); // Verde Esmeralda
+                colorTema = Color.FromArgb(20, 120, 80);
                 icono = "🎓";
                 titulo = "Gestión de Alumnos";
                 subtitulo = "Expedientes estudiantiles, matrículas, promedios y estatus académico.";
@@ -40,7 +45,7 @@ namespace Sistema_Escolar
             }
             else if (modulo.Contains("docen"))
             {
-                colorTema = Color.FromArgb(90, 45, 130); // Morado
+                colorTema = Color.FromArgb(90, 45, 130);
                 icono = "👨‍🏫";
                 titulo = "Plantilla de Docentes";
                 subtitulo = "Registro de profesores, materias asignadas, teléfonos y correos institucionales.";
@@ -48,7 +53,7 @@ namespace Sistema_Escolar
             }
             else
             {
-                colorTema = Color.FromArgb(25, 95, 160); // Azul
+                colorTema = Color.FromArgb(25, 95, 160);
                 icono = "📅";
                 titulo = "Cronograma de Horarios";
                 subtitulo = "Distribución de clases, asignación de aulas, docentes y grupos escolares.";
@@ -59,8 +64,6 @@ namespace Sistema_Escolar
             lblTitulo.Text = $"{icono} {titulo}";
             lblSubtitulo.Text = subtitulo;
             btnAgregar.BackColor = colorTema;
-
-            // Personalizar encabezado del DataGridView con el color del tema
             dataGridView1.ColumnHeadersDefaultCellStyle.BackColor = colorTema;
             dataGridView1.ColumnHeadersDefaultCellStyle.SelectionBackColor = colorTema;
         }
@@ -102,6 +105,68 @@ namespace Sistema_Escolar
             }
         }
 
+        private void ConfigurarFuncionesAdicionales()
+        {
+            if (btnExportarCsv != null) return;
+
+            btnExportarCsv = CrearBotonAccion("📤 CSV", 365, BtnExportarCsv_Click);
+            btnRespaldo = CrearBotonAccion("💾 Respaldo", 455, BtnRespaldo_Click);
+            btnRestaurar = CrearBotonAccion("♻ Restaurar", 560, BtnRestaurar_Click);
+
+            pnlBarraHerramientas.Controls.Add(btnExportarCsv);
+            pnlBarraHerramientas.Controls.Add(btnRespaldo);
+            pnlBarraHerramientas.Controls.Add(btnRestaurar);
+        }
+
+        private Button CrearBotonAccion(string texto, int x, EventHandler click)
+        {
+            Button btn = new Button
+            {
+                Text = texto,
+                Location = new Point(x, 12),
+                Size = new Size(90, 36),
+                BackColor = Color.White,
+                ForeColor = Color.FromArgb(70, 80, 95),
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Font = new Font("Segoe UI", 8.8F, FontStyle.Bold)
+            };
+            btn.FlatAppearance.BorderColor = Color.FromArgb(190, 200, 215);
+            btn.Click += click;
+            return btn;
+        }
+
+        private void AplicarPermisosPorRol()
+        {
+            string rol = (DatosEscolares.RolActual ?? string.Empty).ToLowerInvariant();
+
+            bool esAdmin = rol.Contains("admin");
+            bool esDocente = rol.Contains("docente");
+
+            bool puedeAgregarEditar = esAdmin || esDocente;
+            bool puedeEliminar = esAdmin;
+
+            if (esDocente && modulo.Contains("docen"))
+            {
+                puedeAgregarEditar = false;
+            }
+
+            if (!esAdmin && !esDocente)
+            {
+                puedeAgregarEditar = false;
+                puedeEliminar = false;
+            }
+
+            btnAgregar.Enabled = puedeAgregarEditar;
+            btnEditar.Enabled = puedeAgregarEditar;
+            btnEliminar.Enabled = puedeEliminar;
+
+            if (!puedeAgregarEditar && !puedeEliminar)
+            {
+                lblEstado.Text = "🔒 Modo consulta: no cuentas con permisos para modificar registros.";
+            }
+        }
+
         private void txtBuscar_TextChanged(object sender, EventArgs e)
         {
             if (vistaDatos == null || tablaDatos == null) return;
@@ -114,7 +179,6 @@ namespace Sistema_Escolar
             }
             else
             {
-                // Construir filtro dinámico por texto en todas las columnas relevantes
                 string rowFilter = "";
                 foreach (DataColumn col in tablaDatos.Columns)
                 {
@@ -183,9 +247,16 @@ namespace Sistema_Escolar
             if (dr == DialogResult.Yes)
             {
                 filaReal.Delete();
-                DatosEscolares.GuardarDatos();
-                ActualizarContador();
-                lblEstado.Text = "🗑️ Registro eliminado correctamente.";
+                if (DatosEscolares.GuardarDatos(out string error))
+                {
+                    DatosEscolares.RegistrarAuditoria("ELIMINAR", modulo, "Se eliminó " + identificador);
+                    ActualizarContador();
+                    lblEstado.Text = "🗑️ Registro eliminado correctamente.";
+                }
+                else
+                {
+                    MessageBox.Show(error, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
 
@@ -197,9 +268,77 @@ namespace Sistema_Escolar
             lblEstado.Text = "🔄 Lista de datos actualizada.";
         }
 
+        private void BtnExportarCsv_Click(object sender, EventArgs e)
+        {
+            using (SaveFileDialog saveDialog = new SaveFileDialog())
+            {
+                saveDialog.Filter = "Archivo CSV (*.csv)|*.csv";
+                saveDialog.FileName = $"reporte_{modulo}_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+                if (saveDialog.ShowDialog(this) != DialogResult.OK) return;
+
+                if (DatosEscolares.ExportarTablaCsv(modulo, saveDialog.FileName, out string error))
+                {
+                    DatosEscolares.RegistrarAuditoria("EXPORTAR_CSV", modulo, "Archivo: " + saveDialog.FileName);
+                    lblEstado.Text = "📤 Exportación CSV completada.";
+                }
+                else
+                {
+                    MessageBox.Show(error, "Error de exportación", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private void BtnRespaldo_Click(object sender, EventArgs e)
+        {
+            using (FolderBrowserDialog folderDialog = new FolderBrowserDialog())
+            {
+                folderDialog.Description = "Selecciona la carpeta destino del respaldo";
+                if (folderDialog.ShowDialog(this) != DialogResult.OK) return;
+
+                if (DatosEscolares.CrearRespaldo(folderDialog.SelectedPath, out string error))
+                {
+                    DatosEscolares.RegistrarAuditoria("RESPALDO", modulo, "Destino: " + folderDialog.SelectedPath);
+                    lblEstado.Text = "💾 Respaldo generado correctamente.";
+                }
+                else
+                {
+                    MessageBox.Show(error, "Error de respaldo", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private void BtnRestaurar_Click(object sender, EventArgs e)
+        {
+            using (FolderBrowserDialog folderDialog = new FolderBrowserDialog())
+            {
+                folderDialog.Description = "Selecciona la carpeta del respaldo a restaurar";
+                if (folderDialog.ShowDialog(this) != DialogResult.OK) return;
+
+                DialogResult confirmar = MessageBox.Show(
+                    "Restaurar reemplazará los datos actuales. ¿Deseas continuar?",
+                    "Confirmar restauración",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+
+                if (confirmar != DialogResult.Yes) return;
+
+                if (DatosEscolares.RestaurarDesdeRespaldo(folderDialog.SelectedPath, out string error))
+                {
+                    SeguridadServicio.RecargarUsuarios();
+                    CargarDatos();
+                    DatosEscolares.RegistrarAuditoria("RESTAURAR", modulo, "Origen: " + folderDialog.SelectedPath);
+                    lblEstado.Text = "♻ Restauración completada.";
+                }
+                else
+                {
+                    MessageBox.Show(error, "Error de restauración", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
         private void dataGridView1_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
         {
-            if (e.RowIndex >= 0)
+            if (e.RowIndex >= 0 && btnEditar.Enabled)
             {
                 btnEditar_Click(sender, e);
             }
@@ -207,7 +346,7 @@ namespace Sistema_Escolar
 
         private void btnRegresar_Click(object sender, EventArgs e)
         {
-            this.Close(); // El FormClosed en Menu_Princ vuelve a mostrar el menú principal
+            this.Close();
         }
 
         private void ActualizarContador()
